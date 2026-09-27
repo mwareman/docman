@@ -1,0 +1,32 @@
+services:
+  docman:
+    image: docman:latest
+    build:
+      context: .
+      args:
+        VERSION: dev
+    container_name: docman
+    restart: unless-stopped
+    ports:
+      - "9444:9444"   # HTTPS — the one you use
+      - "9080:9080"   # HTTP — redirects to HTTPS
+    volumes:
+      # Persistent state: the SQLite database, and the TLS key pair.
+      - docman-data:/data
+      # DocMan manages the host it runs on, so it needs the engine socket.
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Names to put in the self-signed certificate. Passkeys need a hostname,
+      # so pick one and always browse to it (add it to your hosts file if you
+      # do not have DNS for it).
+      DOCMAN_HOSTNAMES: "docman.local"
+      # Uncomment when DocMan sits behind a reverse proxy that terminates TLS.
+      # DOCMAN_TRUST_PROXY: "true"
+      # DOCMAN_RP_ID: "docman.example.com"
+    # DocMan only reads and writes through the docker socket; it needs no extra
+    # kernel capabilities of its own.
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  docman-data:

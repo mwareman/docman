@@ -1,0 +1,25 @@
+/docman
+/docman.exe
+/dist/
+/data/
+*.db
+*.db-wal
+*.db-shm
+# DocMan's secrets key and TLS key pair, should a data folder land here.
+secrets.key
+tls-*.pem
+
+# Extra root CAs for TLS-intercepting networks: local to each machine.
+/build/certs/*.crt
+/build/certs/*.pem
+
+# Personal notes on how to use git with this repository; not part of DocMan.
+/git.md
+
+# Editors and operating systems.
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+Desktop.ini
+.DS_Store

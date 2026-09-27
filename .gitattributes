@@ -1,0 +1,9 @@
+# Store text with LF line endings in the repository, whatever the machine,
+# so the Go sources, scripts and Dockerfile build the same everywhere.
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.gz binary
+*.tar binary
+*.tgz binary

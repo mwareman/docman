@@ -1,0 +1,8 @@
+.git
+dist
+data
+*.md
+!API.md
+!README.md
+!help/*.md
+!build/certs/README.md
