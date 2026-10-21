@@ -2,15 +2,15 @@
 
 ## Versioning
 
-DocMan stays on **1.x**: 1.9, 1.9.1, 1.9.2, then 1.9.3 and so on.
+DocMan stays on **1.x**: 1.9, 1.9.1, 1.9.2, 1.9.3, then 1.9.4 and so on.
 **Do not move to 2.x until the owner says so.**
 
 Each release is built for four architectures and saved to `dist/`:
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/386 \
-  --build-arg VERSION=1.9.2 -t docman:1.9.2 -t docman:latest --load .
-docker save --platform linux/amd64 docman:1.9.2 docman:latest | gzip -9 > dist/docman-1.9.2-amd64.tar.gz
+  --build-arg VERSION=1.9.3 -t docman:1.9.3 -t docman:latest --load .
+docker save --platform linux/amd64 docman:1.9.3 docman:latest | gzip -9 > dist/docman-1.9.3-amd64.tar.gz
 ```
 
 Vet and test without a local Go toolchain (`go.mod` requires Go 1.25; the CA
@@ -26,7 +26,7 @@ docker run --rm -v "$PWD:/src" -w /src -e SSL_CERT_FILE=/src/build/certs/host-ro
 
 | Version | Changes |
 | --- | --- |
-| 1.9.3 (not yet released) | Recreate onto a new image no longer copies the old image's built-in settings: environment entries, labels, command, entrypoint, working directory, user, health check, exposed ports and declared volumes that are still exactly the old image's values are left to the new image (`dock.DropImageDefaults`, applied in `recreateContainer`; unit tests in `internal/dock/inherit_test.go`, and checked end to end against a real engine). Found with TPRM: after recreating onto 1.0.27 its container still carried `TPRM_VERSION=1.0.26` from the old image. The command is only left to the image when the entrypoint is too (Docker ignores an image's `Cmd` once a container has its own entrypoint). Configuration shows Entrypoint and Command empty, with the image's values as placeholders, when they are the image's, and says whether each is the image's or the owner's; `GET …/spec` returns `image_defaults` for it, and the overview tags the command **image default** or **custom**. The documented vet command now uses `golang:1.25-alpine` (`go.mod` requires 1.25) and the host CA file; the Dockerfile build is unaffected — it sets `GOTOOLCHAIN=auto` and fetches 1.25 itself. |
+| 1.9.3 | Recreate onto a new image no longer copies the old image's built-in settings: environment entries, labels, command, entrypoint, working directory, user, health check, exposed ports and declared volumes that are still exactly the old image's values are left to the new image (`dock.DropImageDefaults`, applied in `recreateContainer`; unit tests in `internal/dock/inherit_test.go`, and checked end to end against a real engine). Found with TPRM: after recreating onto 1.0.27 its container still carried `TPRM_VERSION=1.0.26` from the old image. The command is only left to the image when the entrypoint is too (Docker ignores an image's `Cmd` once a container has its own entrypoint). Configuration shows Entrypoint and Command empty, with the image's values as placeholders, when they are the image's, and says whether each is the image's or the owner's; `GET …/spec` returns `image_defaults` for it, and the overview tags the command **image default** or **custom**. The documented vet command now uses `golang:1.25-alpine` (`go.mod` requires 1.25) and the host CA file; the Dockerfile build is unaffected — it sets `GOTOOLCHAIN=auto` and fetches 1.25 itself. |
 | 1.9.2 | GitHub repository registries: install and update pre-built image archives from a repository's files or releases (never built from a Dockerfile); Pull, Recreate and the daily check follow the repository; tags named after a version are reported as pinned. The deploy plan keeps the tag that was chosen. Apache-2.0 license with NOTICE. |
 | 1.9.1 | Registries in Settings: several registries (Docker Hub, GitHub, GitHub Enterprise, GitLab, Quay, AWS ECR, Google, Azure, any other), each with its own sign-in; choosing and searching a registry when creating a container; stored credentials used for every pull and update check; tag lists paged and sorted newest first. The volume explorer's helper container runs only while the explorer is open. |
 | 1.9 | Uploads in pieces that pass any proxy's size limit; upload dialog with two-stage progress and a lock while uploading; fixed addresses rebuilt from Docker when DocMan's database has lost them. |
