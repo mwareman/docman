@@ -13,16 +13,20 @@ docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/386 \
 docker save --platform linux/amd64 docman:1.9.2 docman:latest | gzip -9 > dist/docman-1.9.2-amd64.tar.gz
 ```
 
-Vet without a local Go toolchain:
+Vet and test without a local Go toolchain (`go.mod` requires Go 1.25; the CA
+file lets module downloads pass the network's TLS interception, see
+`build/certs/README.md` — use your own file's name, or drop the `-e` off such a network; in Git Bash prefix the command with `MSYS_NO_PATHCONV=1`):
 
 ```bash
-docker run --rm -v "$PWD:/src" -w /src golang:1.24-alpine go vet ./...
+docker run --rm -v "$PWD:/src" -w /src -e SSL_CERT_FILE=/src/build/certs/host-roots.crt \
+  golang:1.25-alpine sh -c "go vet ./... && go test ./..."
 ```
 
 ## Release history
 
 | Version | Changes |
 | --- | --- |
+| 1.9.3 (not yet released) | Recreate onto a new image no longer copies the old image's built-in settings: environment entries, labels, command, entrypoint, working directory, user, health check, exposed ports and declared volumes that are still exactly the old image's values are left to the new image (`dock.DropImageDefaults`, applied in `recreateContainer`; unit tests in `internal/dock/inherit_test.go`, and checked end to end against a real engine). Found with TPRM: after recreating onto 1.0.27 its container still carried `TPRM_VERSION=1.0.26` from the old image. The command is only left to the image when the entrypoint is too (Docker ignores an image's `Cmd` once a container has its own entrypoint). Configuration shows Entrypoint and Command empty, with the image's values as placeholders, when they are the image's, and says whether each is the image's or the owner's; `GET …/spec` returns `image_defaults` for it, and the overview tags the command **image default** or **custom**. The documented vet command now uses `golang:1.25-alpine` (`go.mod` requires 1.25) and the host CA file; the Dockerfile build is unaffected — it sets `GOTOOLCHAIN=auto` and fetches 1.25 itself. |
 | 1.9.2 | GitHub repository registries: install and update pre-built image archives from a repository's files or releases (never built from a Dockerfile); Pull, Recreate and the daily check follow the repository; tags named after a version are reported as pinned. The deploy plan keeps the tag that was chosen. Apache-2.0 license with NOTICE. |
 | 1.9.1 | Registries in Settings: several registries (Docker Hub, GitHub, GitHub Enterprise, GitLab, Quay, AWS ECR, Google, Azure, any other), each with its own sign-in; choosing and searching a registry when creating a container; stored credentials used for every pull and update check; tag lists paged and sorted newest first. The volume explorer's helper container runs only while the explorer is open. |
 | 1.9 | Uploads in pieces that pass any proxy's size limit; upload dialog with two-stage progress and a lock while uploading; fixed addresses rebuilt from Docker when DocMan's database has lost them. |
@@ -41,7 +45,9 @@ docker run --rm -v "$PWD:/src" -w /src golang:1.24-alpine go vet ./...
 ## Repository
 
 Public at https://github.com/mwareman/docman under the Apache License 2.0; the
-NOTICE file carries the attribution derivatives must keep. `dist/` is not
-committed: each version's archives are attached to its GitHub release, which
-is also where DocMan's own GitHub repository registry finds them. How to use
+NOTICE file carries the attribution derivatives must keep. `dist/` **is**
+committed, so others can download the pre-built archives, and DocMan's own
+GitHub repository registry (folder `dist`) installs and updates from it. Each
+release adds about 45 MB for good; past about 1 GB, move new archives to
+GitHub release assets instead. How to use
 git with it is in `git.md`, which is kept out of the repository.

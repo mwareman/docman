@@ -8,9 +8,9 @@
 
 See `NOTES.md` for the release history.
 
-- The code is published at https://github.com/mwareman/docman (Apache-2.0, with NOTICE). `git.md` holds the owner's git instructions and is ignored by git; keep it up to date when the workflow changes, and never commit `dist/`, data files or `build/certs/*.crt`.
+- The code is published at https://github.com/mwareman/docman (Apache-2.0, with NOTICE). `git.md` holds the owner's git instructions and is ignored by git; keep it up to date when the workflow changes, `dist/` is committed (the owner wants the archives public); data files and `build/certs/*.crt` never are. Each release's archives go into `dist/` and are committed with it.
 
 ## Working on this repo
 
-- No Go toolchain on the workstation: build and vet inside `golang:1.24-alpine` (see `NOTES.md`), and check JavaScript with `node --check` in `node:22-alpine`. Copy each file to a `.mjs` name first: Node 22 passes a plain `.js` ES module even with syntax errors.
+- No Go toolchain on the workstation: build, vet and test inside `golang:1.25-alpine` with `SSL_CERT_FILE` set to the host CA file (see `NOTES.md`), and check JavaScript with `node --check` in `node:22-alpine`. Copy each file to a `.mjs` name first: Node 22 passes a plain `.js` ES module even with syntax errors.
 - The workstation's Docker holds the owner's own images and volumes. Remove only what you created, by name. Never run `docker image prune`, `docker volume prune` or DocMan's **Prune** buttons against it.

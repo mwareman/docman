@@ -4,7 +4,7 @@ import {
   h, add, clear, icon, bytes, rate, pct, num, when, ago, stateClass,
   toast, toastError, confirmDialog, modal, field, notice, spinner, copyText, debounce,
 } from '../ui.js';
-import { Containers, Volumes, socket } from '../api.js';
+import { Containers, Images, Volumes, socket } from '../api.js';
 import { sparkline, dualSparkline } from '../charts.js';
 import { createTerminal } from '../term.js';
 import { specForm, volumeDatalist, untokenize } from './specform.js';
@@ -206,6 +206,21 @@ function overviewTab(pane, container, ctx) {
     const config = inspect.Config || {};
     const state = inspect.State || {};
     const hostConfig = inspect.HostConfig || {};
+    const command = [...(config.Entrypoint || []), ...(config.Cmd || [])];
+    const commandNode = h('span', {}, h('code', { class: 'small', text: untokenize(command) || '—' }));
+    // Whether the command is the image's (it follows a new image version) or
+    // the owner's own (kept on every recreate).
+    if (command.length && inspect.Image) {
+      Images.inspect(inspect.Image).then(({ defaults }) => {
+        const imageCommand = [...(defaults.entrypoint || []), ...(defaults.cmd || [])];
+        const own = untokenize(command) !== untokenize(imageCommand);
+        add(commandNode, [' ', h('span', {
+          class: own ? 'pill accent' : 'pill',
+          text: own ? 'custom' : 'image default',
+          title: own ? 'Set in Configuration: kept when the image is updated.' : 'From the image: follows the image when it is updated.',
+        })]);
+      }).catch(() => {});
+    }
     const rows = [
       ['ID', h('span', { class: 'mono small' }, inspect.Id ? inspect.Id.slice(0, 24) : '—',
         h('button', {
@@ -214,7 +229,7 @@ function overviewTab(pane, container, ctx) {
         }, icon('copy')))],
       ['Image', h('div', {}, h('div', { class: 'mono small', text: config.Image || '—' }),
         h('div', { class: 'small faint mono', text: (inspect.Image || '').replace('sha256:', '').slice(0, 12) }))],
-      ['Command', h('code', { class: 'small', text: untokenize([...(config.Entrypoint || []), ...(config.Cmd || [])]) || '—' })],
+      ['Command', commandNode],
       ['Created', `${when(Date.parse(inspect.Created) / 1000)} (${ago(Date.parse(inspect.Created) / 1000)})`],
       ['Started', state.StartedAt && !state.StartedAt.startsWith('0001')
         ? `${ago(Date.parse(state.StartedAt) / 1000)}${state.Running ? '' : ' (stopped)'}`
@@ -805,6 +820,7 @@ function configTab(pane, container, ctx) {
       const listID = 'docman-volume-list';
       const form = specForm(data.spec, {
         lockName: true, volumeListID: listID, pinnedIP: data.pinned_ip, selfName: container.name,
+        imageDefaults: data.image_defaults,
       });
       const problems = h('div', {});
       const startAfter = h('input', { type: 'checkbox', checked: data.running });

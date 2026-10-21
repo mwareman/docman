@@ -85,7 +85,7 @@ Open **Advanced options** for everything else:
 | Field | Meaning |
 | --- | --- |
 | **Entrypoint** | Replaces the image's entrypoint, the program that always runs. Leave it empty to use the image's. Quote arguments containing spaces. |
-| **Command** | Replaces the arguments passed to the entrypoint. Leave it empty to use the image's. |
+| **Command** | Replaces the arguments passed to the entrypoint. Leave it empty to use the image's. With your own **Entrypoint**, an empty command means no arguments: Docker does not use the image's command then. |
 | **User** | Who the main process runs as: a name, a numeric ID or `uid:gid`, such as `1000:1000`. |
 | **Working directory** | The directory the process starts in. |
 | **Hostname** | The container's own host name. Leave it empty for Docker's default, the start of the container ID. |
@@ -96,6 +96,8 @@ Open **Advanced options** for everything else:
 | **DNS servers** | Name servers to use instead of the host's, comma-separated. |
 | **Extra hosts** | Extra entries for the container's `/etc/hosts`, as `name:address`, comma-separated. |
 | **Labels** | Docker labels, one `key=value` per line. |
+
+**Entrypoint and Command when the image is updated.** On an existing container, the two fields are empty when they hold the image's own values, with those values shown greyed out. An empty field follows the image, so a new image version's entrypoint or command takes effect when the container is [recreated](/help/container) onto it. A value you type is your own and is kept through every update; clear the field to follow the image again. The note under each field says which it is, and the container's **Command** line on its overview is tagged **image default** or **custom**.
 
 The switches underneath:
 

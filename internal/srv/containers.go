@@ -217,11 +217,21 @@ func (s *Server) handleContainerSpec(w http.ResponseWriter, r *http.Request) {
 	if p, err := s.st.Pin(spec.Name); err == nil {
 		pinned = p.IP
 	}
+	// The image's own entrypoint and command, so the editor can tell them apart
+	// from the owner's: only the image's follow a new image version on recreate.
+	var imageDefaults map[string][]string
+	if imageID, _ := inspect["Image"].(string); imageID != "" {
+		if img, err := s.dc.InspectImage(r.Context(), imageID); err == nil {
+			d := dock.DefaultsFromImage(img)
+			imageDefaults = map[string][]string{"entrypoint": d.Entrypoint, "cmd": d.Cmd}
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"spec":      spec,
-		"running":   containerRunning(inspect),
-		"pinned_ip": pinned,
-		"networks":  dock.NetworkAttachments(inspect),
+		"spec":           spec,
+		"running":        containerRunning(inspect),
+		"pinned_ip":      pinned,
+		"networks":       dock.NetworkAttachments(inspect),
+		"image_defaults": imageDefaults,
 	})
 }
 
@@ -516,6 +526,21 @@ func (s *Server) recreateContainer(ctx context.Context, ref string, spec *dock.C
 	}
 
 	body := dock.CreateBodyFrom(inspect, spec)
+	// Settings the container only has because its old image supplied them (ENV,
+	// LABEL, CMD, HEALTHCHECK ...) are dropped, so the new image's own defaults
+	// apply: otherwise a new image version would keep the old one's environment
+	// (e.g. its version variable). Settings the owner changed are kept.
+	if imageID, _ := inspect["Image"].(string); imageID != "" {
+		if img, err := s.dc.InspectImage(ctx, imageID); err == nil {
+			if imgCfg, ok := img["Config"].(map[string]any); ok {
+				if dropped := dock.DropImageDefaults(body, imgCfg); len(dropped) > 0 {
+					s.logf("recreate %s: %d inherited image default(s) left to the image: %v", oldName, len(dropped), dropped)
+				}
+			}
+		} else {
+			s.logf("recreate %s: old image %s not found (%v); its defaults are copied as before", oldName, imageID, err)
+		}
+	}
 	// A pinned address must survive the rebuild.
 	s.nm.ApplyPinToCreateBody(newName, body)
 

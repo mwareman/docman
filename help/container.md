@@ -75,6 +75,8 @@ Replaces the container with a new one built from the same configuration. Use it 
 
 You can change the tick either way before confirming.
 
+**The new image's own settings apply.** Docker records an image's built-in settings — its environment variables, labels, command, entrypoint, working directory, user, health check, exposed ports and declared volumes — in every container made from it, as if you had chosen them. On a recreate DocMan leaves out every setting that is still exactly the old image's value, so the new image supplies its own: a new version's environment (for example its version number), labels and command take effect. Settings you changed — an environment variable with a different value, an extra label, your own command — are kept. (With your own entrypoint the command is always kept, because Docker does not use an image's command then.) Which of entrypoint and command are yours is shown in [Configuration](/help/configuration#advanced-options). (Before 1.9.3 they were all copied, so a new image version kept the old one's built-in values.)
+
 #### Recreate runs on the server
 
 The pull and rebuild run as a job on DocMan itself, not in your browser. So they finish even if your browser loses its connection. That is exactly what happens when the container being upgraded is the one you reach DocMan through, such as a Cloudflare tunnel or a reverse proxy.

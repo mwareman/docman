@@ -181,7 +181,14 @@ tag has moved to another image.
 ### The container spec
 
 `GET /api/containers/{id}/spec` →
-`{"spec":{…},"running":true,"pinned_ip":"172.20.0.11","networks":{…}}`
+`{"spec":{…},"running":true,"pinned_ip":"172.20.0.11","networks":{…},"image_defaults":{"entrypoint":["/docker-entrypoint.sh"],"cmd":["nginx","-g","daemon off;"]}}`
+
+`image_defaults` is the entrypoint and command built into the container's
+current image (`null` when that image is gone). A spec `entrypoint` or `cmd`
+equal to it is the image's and follows a new image on recreate; a different one
+is the container's own and is kept. The image's `cmd` is only used while the
+entrypoint is the image's too: Docker ignores it once a container has its own
+entrypoint.
 
 The spec is the editable view. Send the same shape back to `PUT …/spec` or to
 `POST /api/containers`.
@@ -278,7 +285,11 @@ common mistake of sending only the fields being changed.
 ```
 
 All fields optional. `pull:true` fetches the newest image first — the usual way
-to update a container in place.
+to update a container in place. Settings the container only has because its old
+image supplied them (image `ENV`, `LABEL`, `CMD`, `ENTRYPOINT`, `WORKDIR`, `USER`,
+`HEALTHCHECK`, `EXPOSE`, `VOLUME` values that are still unchanged) are left out,
+so the new image's defaults apply; settings that differ from the old image's are
+kept. The same applies to `PUT …/spec`.
 
 For an image that is in no registry, upload the new version with
 `POST /api/images/upload` under the same tag, then recreate with `pull:false`:

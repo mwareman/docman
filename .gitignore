@@ -1,6 +1,5 @@
 /docman
 /docman.exe
-/dist/
 /data/
 *.db
 *.db-wal

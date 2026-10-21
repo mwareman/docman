@@ -69,8 +69,40 @@ export function specForm(spec, opts = {}) {
     ...RESTART_POLICIES.map(([value, label]) =>
       h('option', { value, text: label, selected: (state.restart_policy || 'unless-stopped') === value })));
 
-  const entrypointInput = h('input', { type: 'text', class: 'mono', value: untokenize(state.entrypoint), spellcheck: false, placeholder: 'leave empty to use the image default' });
-  const cmdInput = h('input', { type: 'text', class: 'mono', value: untokenize(state.cmd), spellcheck: false, placeholder: 'leave empty to use the image default' });
+  // With the image's own entrypoint and command known (an existing container),
+  // values equal to them are shown empty with the image's value as placeholder:
+  // empty follows the image, also after an update; anything typed is the owner's
+  // and is kept. The Engine ignores the image's command once a container has its
+  // own entrypoint, so the command only counts as the image's when the entrypoint
+  // does too.
+  const imageDefaults = opts.imageDefaults || null;
+  const sameTokens = (a, b) => (a || []).length > 0 && untokenize(a) === untokenize(b);
+  const imageEntrypoint = imageDefaults ? imageDefaults.entrypoint || [] : [];
+  const imageCmd = imageDefaults ? imageDefaults.cmd || [] : [];
+  const entrypointIsImage = !!imageDefaults && sameTokens(state.entrypoint, imageEntrypoint);
+  const cmdIsImage = !!imageDefaults && (entrypointIsImage || !(state.entrypoint || []).length) && sameTokens(state.cmd, imageCmd);
+  const defaultPlaceholder = (tokens) => (tokens.length ? `image default: ${untokenize(tokens)}` : 'leave empty to use the image default');
+
+  const entrypointInput = h('input', {
+    type: 'text', class: 'mono', value: entrypointIsImage ? '' : untokenize(state.entrypoint), spellcheck: false, placeholder: defaultPlaceholder(imageEntrypoint),
+  });
+  const cmdInput = h('input', {
+    type: 'text', class: 'mono', value: cmdIsImage ? '' : untokenize(state.cmd), spellcheck: false, placeholder: defaultPlaceholder(imageCmd),
+  });
+
+  function entrypointHelp() {
+    if (!imageDefaults) return 'Overrides the image entrypoint.';
+    return entrypointInput.value.trim()
+      ? 'Your own: kept when the image is updated. Clear it to follow the image.'
+      : 'Empty: the image’s entrypoint, also after an update.';
+  }
+  function cmdHelp() {
+    if (!imageDefaults) return 'Arguments passed to the entrypoint.';
+    if (cmdInput.value.trim()) return 'Your own: kept when the image is updated. Clear it to follow the image.';
+    return entrypointInput.value.trim()
+      ? 'Empty: no arguments. With your own entrypoint the image’s command is not used.'
+      : 'Empty: the image’s command, also after an update.';
+  }
 
   const userInput = h('input', { type: 'text', value: state.user || '', placeholder: 'root, 1000:1000, appuser', spellcheck: false });
   const workdirInput = h('input', { type: 'text', class: 'mono', value: state.working_dir || '', spellcheck: false });
@@ -247,14 +279,23 @@ export function specForm(spec, opts = {}) {
 
   // ---------- assembly ----------
 
+  const entrypointField = field('Entrypoint', entrypointInput, entrypointHelp());
+  const cmdField = field('Command', cmdInput, cmdHelp());
+  const refreshCommandHelp = () => {
+    entrypointField.querySelector('.help').textContent = entrypointHelp();
+    cmdField.querySelector('.help').textContent = cmdHelp();
+  };
+  entrypointInput.addEventListener('input', refreshCommandHelp);
+  cmdInput.addEventListener('input', refreshCommandHelp);
+
   const advanced = h('details', { class: 'card', style: { padding: '0' } },
     h('summary', {
       style: { padding: '12px 16px', cursor: 'pointer', fontWeight: '580', fontSize: '13px' },
     }, 'Advanced options'),
     h('div', { class: 'card-body', style: { borderTop: '1px solid var(--border)' } },
       h('div', { class: 'grid c2' },
-        field('Entrypoint', entrypointInput, 'Overrides the image entrypoint.'),
-        field('Command', cmdInput, 'Arguments passed to the entrypoint.'),
+        entrypointField,
+        cmdField,
         field('User', userInput),
         field('Working directory', workdirInput),
         field('Hostname', hostnameInput),
