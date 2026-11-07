@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"docman/internal/dock"
 )
@@ -51,6 +52,33 @@ func (c *imageRefs) put(id, ref string, live map[string]bool) {
 
 var containerImageRefs imageRefs
 
+// imageListCache holds the image list for a couple of seconds, so a burst of
+// refreshes (page load, the live stream, several open tabs) shares one call.
+// Only update detection uses it; the Images page always asks Docker directly.
+type imageListCache struct {
+	mu     sync.Mutex
+	at     time.Time
+	images []*dock.ImageSummary
+}
+
+const imageListTTL = 3 * time.Second
+
+var recentImages imageListCache
+
+func (c *imageListCache) get(ctx context.Context, dc *dock.Client) ([]*dock.ImageSummary, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.images != nil && time.Since(c.at) < imageListTTL {
+		return c.images, nil
+	}
+	images, err := dc.ListImages(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	c.images, c.at = images, time.Now()
+	return images, nil
+}
+
 // imageUpdate is what updatesFor found for one container: either a newer image
 // on this host under its tag, or (runsTagged) that it runs exactly the image
 // its tag names, so a newer version in the registry would be an update.
@@ -63,7 +91,7 @@ type imageUpdate struct {
 // updatesFor works out which of the listed containers have an update waiting.
 func (s *Server) updatesFor(ctx context.Context, list []*dock.ContainerSummary) map[string]imageUpdate {
 	out := map[string]imageUpdate{}
-	images, err := s.dc.ListImages(ctx, false)
+	images, err := recentImages.get(ctx, s.dc)
 	if err != nil {
 		return out
 	}
@@ -85,17 +113,41 @@ func (s *Server) updatesFor(ctx context.Context, list []*dock.ContainerSummary) 
 		}
 	}
 
+	// Inspect the containers not seen before in parallel: on a cold cache this
+	// is one call per container, and doing them in turn made the first load slow.
+	var unknown []*dock.ContainerSummary
+	for _, c := range list {
+		if _, ok := containerImageRefs.get(c.ID); !ok {
+			unknown = append(unknown, c)
+		}
+	}
+	if len(unknown) > 0 {
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, 8)
+		for _, c := range unknown {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(c *dock.ContainerSummary) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				inspect, err := s.dc.InspectContainer(ctx, c.ID)
+				if err != nil {
+					return
+				}
+				var ref string
+				if cfg, ok := inspect["Config"].(map[string]any); ok {
+					ref, _ = cfg["Image"].(string)
+				}
+				containerImageRefs.put(c.ID, ref, live)
+			}(c)
+		}
+		wg.Wait()
+	}
+
 	for _, c := range list {
 		ref, ok := containerImageRefs.get(c.ID)
 		if !ok {
-			inspect, err := s.dc.InspectContainer(ctx, c.ID)
-			if err != nil {
-				continue
-			}
-			if cfg, ok := inspect["Config"].(map[string]any); ok {
-				ref, _ = cfg["Image"].(string)
-			}
-			containerImageRefs.put(c.ID, ref, live)
+			continue
 		}
 		// A container created from an image ID or a digest is pinned to that
 		// exact image; nothing can be newer under it.

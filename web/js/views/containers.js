@@ -210,23 +210,30 @@ export function containersView(ctx) {
     }
   }
 
+  let streamed = false;
   const conn = socket('/api/stream/containers', {
     onJSON: (message) => {
       if (message.type === 'error') return;
       if (message.type !== 'containers') return;
+      streamed = true;
       all = message.containers || [];
       stats = new Map((message.stats || []).map((s) => [s.id, s]));
       draw();
     },
   });
 
-  Containers.list().then((data) => {
-    if (all.length) return;
-    all = data.containers || [];
-    draw();
-  }).catch(toastError);
+  // The live stream normally delivers the list first. Ask over REST only if it
+  // has not by now, so a slow start does not do the same work twice.
+  const fallback = setTimeout(() => {
+    if (streamed) return;
+    Containers.list().then((data) => {
+      if (streamed) return;
+      all = data.containers || [];
+      draw();
+    }).catch(toastError);
+  }, 1500);
 
-  return { dispose: () => conn.close() };
+  return { dispose: () => { clearTimeout(fallback); conn.close(); } };
 }
 
 function iconBtn(name, title, onClick, disabled = false, extra = '') {
