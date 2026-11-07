@@ -2,7 +2,7 @@
 
 ## Versioning (set by the owner — do not change without being told)
 
-- DocMan stays on **1.x**. Current release: **1.9.3**; the next is 1.9.4, and so on.
+- DocMan stays on **1.x**. Current release: **1.9.4**; the next is 1.9.5, and so on.
 - **Never** release 2.0 or any 2.x until the owner explicitly says to.
 - A release means: `--build-arg VERSION=<v>`, tags `docman:<v>` and `docman:latest`, archives `dist/docman-<v>-*.tar.gz`, and the version references in `README.md`. Record it in `NOTES.md`.
 
