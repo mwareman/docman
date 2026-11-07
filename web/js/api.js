@@ -167,6 +167,10 @@ export const State = {
   bootstrapAdmin: (key, username, password) => post('/api/bootstrap/admin', { key, username, password }),
 };
 
+export const Counts = {
+  get: () => get('/api/counts'),
+};
+
 export const Containers = {
   list: () => get('/api/containers'),
   one: (id) => get(`/api/containers/${encodeURIComponent(id)}`),

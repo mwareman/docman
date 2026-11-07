@@ -52,31 +52,59 @@ func (c *imageRefs) put(id, ref string, live map[string]bool) {
 
 var containerImageRefs imageRefs
 
-// imageListCache holds the image list for a couple of seconds, so a burst of
-// refreshes (page load, the live stream, several open tabs) shares one call.
-// Only update detection uses it; the Images page always asks Docker directly.
-type imageListCache struct {
-	mu     sync.Mutex
-	at     time.Time
-	images []*dock.ImageSummary
+// listCache holds a Docker list for a couple of seconds, so a burst of requests
+// (page load, the live stream, the sidebar counts, several open tabs) shares one
+// call. Any change made through the API clears it (see Server.route), so the
+// UI never shows its own change as stale; only changes made outside DocMan can
+// lag, by at most listTTL.
+type listCache[T any] struct {
+	mu    sync.Mutex
+	at    time.Time
+	items []T
+	ok    bool
 }
 
-const imageListTTL = 3 * time.Second
+const listTTL = 3 * time.Second
 
-var recentImages imageListCache
-
-func (c *imageListCache) get(ctx context.Context, dc *dock.Client) ([]*dock.ImageSummary, error) {
+func (c *listCache[T]) get(fetch func() ([]T, error)) ([]T, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.images != nil && time.Since(c.at) < imageListTTL {
-		return c.images, nil
+	if c.ok && time.Since(c.at) < listTTL {
+		return c.items, nil
 	}
-	images, err := dc.ListImages(ctx, false)
+	items, err := fetch()
 	if err != nil {
 		return nil, err
 	}
-	c.images, c.at = images, time.Now()
-	return images, nil
+	c.items, c.at, c.ok = items, time.Now(), true
+	return items, nil
+}
+
+func (c *listCache[T]) clear() {
+	c.mu.Lock()
+	c.ok = false
+	c.mu.Unlock()
+}
+
+// recentImages is the list of images in use or tagged (all=false);
+// recentContainers is every container, stopped ones included. Callers must
+// treat both as read-only.
+var (
+	recentImages     listCache[*dock.ImageSummary]
+	recentContainers listCache[*dock.ContainerSummary]
+)
+
+func clearRecentLists() {
+	recentImages.clear()
+	recentContainers.clear()
+}
+
+func cachedImages(ctx context.Context, dc *dock.Client) ([]*dock.ImageSummary, error) {
+	return recentImages.get(func() ([]*dock.ImageSummary, error) { return dc.ListImages(ctx, false) })
+}
+
+func cachedContainers(ctx context.Context, dc *dock.Client) ([]*dock.ContainerSummary, error) {
+	return recentContainers.get(func() ([]*dock.ContainerSummary, error) { return dc.ListContainers(ctx, true) })
 }
 
 // imageUpdate is what updatesFor found for one container: either a newer image
@@ -91,7 +119,7 @@ type imageUpdate struct {
 // updatesFor works out which of the listed containers have an update waiting.
 func (s *Server) updatesFor(ctx context.Context, list []*dock.ContainerSummary) map[string]imageUpdate {
 	out := map[string]imageUpdate{}
-	images, err := recentImages.get(ctx, s.dc)
+	images, err := cachedImages(ctx, s.dc)
 	if err != nil {
 		return out
 	}

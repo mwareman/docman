@@ -1,7 +1,7 @@
 // DocMan shell: boot, authentication gate, sidebar, hash router.
 
 import { h, add, clear, icon, logoMark, toast, toastError, confirmDialog } from './ui.js';
-import { State, System, Containers, Images, Volumes } from './api.js';
+import { State, System, Counts } from './api.js';
 import { renderGate } from './views/gate.js';
 import { dashboardView } from './views/dashboard.js';
 import { containersView } from './views/containers.js';
@@ -186,17 +186,8 @@ function renderNav() {
 
 async function refreshCounts() {
   try {
-    const [containers, images, volumes] = await Promise.all([
-      Containers.list(),
-      Images.list(),
-      Volumes.list(),
-    ]);
-    shellState.counts = {
-      containers: (containers.containers || []).length,
-      running: (containers.containers || []).filter((c) => c.state === 'running').length,
-      images: (images.images || []).length,
-      volumes: (volumes.volumes || []).length,
-    };
+    const { containers, running, images, volumes } = await Counts.get();
+    shellState.counts = { containers, running, images, volumes };
     renderNav();
   } catch { /* counts are cosmetic */ }
 }

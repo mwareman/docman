@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
+	"docman/internal/dock"
 	"docman/internal/netmgr"
 )
 
@@ -33,6 +35,42 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 			"tls":         !s.cfg.DisableTLS,
 			"session_ttl": int64(s.cfg.SessionTTL.Seconds()),
 		},
+	})
+}
+
+// handleCounts answers the sidebar's four numbers. The sidebar used to fetch the
+// full container, image and volume lists for them, which meant update detection
+// and per-image lookups on every page load; plain Docker lists are enough here.
+func (s *Server) handleCounts(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var (
+		wg               sync.WaitGroup
+		containers       []*dock.ContainerSummary
+		images           []*dock.ImageSummary
+		volumes          []*dock.Volume
+		errC, errI, errV error
+	)
+	wg.Add(3)
+	go func() { defer wg.Done(); containers, errC = cachedContainers(ctx, s.dc) }()
+	go func() { defer wg.Done(); images, errI = cachedImages(ctx, s.dc) }()
+	go func() { defer wg.Done(); volumes, errV = s.dc.ListVolumes(ctx) }()
+	wg.Wait()
+	for _, err := range []error{errC, errI, errV} {
+		if err != nil {
+			failDocker(w, err)
+			return
+		}
+	}
+	containers = withoutHelpers(containers)
+	running := 0
+	for _, c := range containers {
+		if c.State == "running" {
+			running++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]int{
+		"containers": len(containers), "running": running,
+		"images": len(images), "volumes": len(volumes),
 	})
 }
 

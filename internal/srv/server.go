@@ -153,6 +153,7 @@ func (s *Server) routes() {
 	// Host and system.
 	s.get("/api/system", s.handleSystem)
 	s.get("/api/system/df", s.handleDiskUsage)
+	s.get("/api/counts", s.handleCounts)
 	s.get("/api/system/metrics", s.handleHostMetricsOnce)
 	s.get("/api/system/volume-drivers", s.handleVolumeDrivers)
 	s.get("/api/audit", s.handleAudit)
@@ -258,6 +259,16 @@ func (s *Server) patch(pattern string, h http.HandlerFunc)  { s.route(http.Metho
 func (s *Server) delete(pattern string, h http.HandlerFunc) { s.route(http.MethodDelete, pattern, h) }
 
 func (s *Server) route(method, pattern string, h http.HandlerFunc) {
+	if method != http.MethodGet {
+		// A change may alter what the container and image lists say, so the
+		// short-lived copies of them must not outlive it.
+		inner := h
+		h = func(w http.ResponseWriter, r *http.Request) {
+			clearRecentLists()
+			defer clearRecentLists()
+			inner(w, r)
+		}
+	}
 	s.mux.Handle(method+" "+pattern, s.requireAuth(h))
 }
 

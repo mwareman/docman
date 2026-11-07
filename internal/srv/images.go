@@ -24,7 +24,7 @@ func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
 	// Which images are in use, so the UI can warn before a delete.
 	inUse := map[string]int{}
 	usedBy := map[string][]string{}
-	if containers, err := s.dc.ListContainers(r.Context(), true); err == nil {
+	if containers, err := cachedContainers(r.Context(), s.dc); err == nil {
 		for _, c := range withoutHelpers(containers) {
 			inUse[c.ImageID]++
 			usedBy[c.ImageID] = append(usedBy[c.ImageID], c.Name())

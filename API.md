@@ -74,6 +74,7 @@ curl -sk $D/api > api.md          # raw Markdown, ready to feed to a tool
 | GET | `/api/state` | public: setup and sign-in state |
 | GET | `/api/system` | engine info, DocMan version, managed network |
 | GET | `/api/system/df` | image/volume disk usage |
+| GET | `/api/counts` | container, running, image and volume counts (the sidebar's numbers) |
 | GET | `/api/system/metrics` | one host CPU/memory/disk sample |
 | GET | `/api/audit?limit=200` | recent changes |
 | GET | `/api/settings` · PATCH | preferences |

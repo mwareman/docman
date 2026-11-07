@@ -6,7 +6,7 @@
 # compiled in via Go's time/tzdata, and the golang:alpine image already carries
 # a CA bundle.
 
-FROM --platform=$BUILDPLATFORM golang:1.24-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 
 ARG TARGETOS
 ARG TARGETARCH
