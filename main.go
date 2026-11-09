@@ -164,6 +164,7 @@ func run(logger *log.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	go server.StatusMonitor(ctx)
 	go server.Housekeeping(ctx)
 	go server.SweepSelfReplaceHelpers(ctx)
 	go server.ImageUpdateChecker(ctx)

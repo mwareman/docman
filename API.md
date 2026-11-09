@@ -654,6 +654,14 @@ Every `stats_interval_ms` (default 2000):
 {"type":"containers","containers":[…list shape…],"stats":[…container samples…]}
 ```
 
+### `/api/stream/status` — counts, disk usage and images, live
+
+A background monitor in DocMan follows Docker's events (and re-reads everything every 10 seconds regardless). It keeps the container list, image list, counts and disk usage as one snapshot, answers `GET /api/containers`, `/api/images`, `/api/counts` and the disk-usage endpoint from it, and writes it to `status.json` in the data directory whenever it changes. This stream sends a message on connect and again each time a new snapshot is published:
+
+```json
+{"type":"status","version":42,"updated_at":"…","counts":{"containers":4,"running":4,"images":11,"volumes":1},"storage":{…disk usage shape…},"images":[…list shape…]}
+```
+
 ### `/api/stream/stats/{id}` — one container
 
 ```json

@@ -379,28 +379,19 @@ func (s *Server) handleContainersStream(w http.ResponseWriter, r *http.Request) 
 	interval := s.statsInterval()
 	t := time.NewTicker(interval)
 	defer t.Stop()
+	changed, unsubscribe := s.mon.subscribe()
+	defer unsubscribe()
+	// The list comes from the monitor's snapshot, so this costs no Docker calls;
+	// it goes out when a new snapshot is published, and on every tick for the
+	// live figures that ride along.
 	send := func() bool {
-		list, err := s.dc.ListContainers(ctx, true)
+		snap, err := s.mon.current(ctx)
 		if err != nil {
 			return conn.WriteJSON(map[string]any{"type": "error", "error": err.Error()}) == nil
 		}
-		list = withoutHelpers(list)
-		pins := s.pinMap()
-		selfID := s.selfID()
-		views := make([]*containerView, 0, len(list))
-		for _, c := range list {
-			views = append(views, s.toView(c, pins, selfID))
-		}
-		s.markUpdates(views, s.updatesFor(ctx, list))
-		sort.Slice(views, func(i, j int) bool {
-			if (views[i].State == "running") != (views[j].State == "running") {
-				return views[i].State == "running"
-			}
-			return strings.ToLower(views[i].Name) < strings.ToLower(views[j].Name)
-		})
 		return conn.WriteJSON(map[string]any{
 			"type":       "containers",
-			"containers": views,
+			"containers": snap.Containers,
 			"stats":      s.hub.snapshot(),
 		}) == nil
 	}
@@ -411,10 +402,64 @@ func (s *Server) handleContainersStream(w http.ResponseWriter, r *http.Request) 
 		select {
 		case <-ctx.Done():
 			return
+		case <-changed:
+			if !send() {
+				return
+			}
 		case <-t.C:
 			if !send() {
 				return
 			}
+		}
+	}
+}
+
+// ---------- status stream ----------
+
+// handleStatusStream pushes the monitor's counts, disk usage and image list
+// each time a new snapshot is published. The sidebar and the Overview and
+// Images pages follow it.
+func (s *Server) handleStatusStream(w http.ResponseWriter, r *http.Request) {
+	conn, ok := s.upgrade(w, r)
+	if !ok {
+		return
+	}
+	defer conn.Close()
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	go drainClient(conn, cancel)
+	stop := make(chan struct{})
+	defer close(stop)
+	go conn.Pinger(25*time.Second, stop)
+
+	changed, unsubscribe := s.mon.subscribe()
+	defer unsubscribe()
+	var sent int64
+	for {
+		snap, err := s.mon.current(ctx)
+		if err != nil {
+			if conn.WriteJSON(map[string]any{"type": "error", "error": err.Error()}) != nil {
+				return
+			}
+		} else if snap.Version != sent {
+			sent = snap.Version
+			if conn.WriteJSON(map[string]any{
+				"type":       "status",
+				"version":    snap.Version,
+				"updated_at": snap.UpdatedAt,
+				"counts":     snap.Counts,
+				"storage":    snap.Storage,
+				"images":     snap.Images,
+			}) != nil {
+				return
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-changed:
+		case <-time.After(15 * time.Second):
+			// Also covers a failed refresh: try again.
 		}
 	}
 }

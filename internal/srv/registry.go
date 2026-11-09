@@ -75,6 +75,8 @@ func (s *Server) ImageUpdateChecker(ctx context.Context) {
 func (s *Server) checkImages(ctx context.Context, only string) []*store.ImageCheck {
 	checkMu.Lock()
 	defer checkMu.Unlock()
+	// The results show in the container and image lists.
+	defer s.mon.invalidate()
 
 	images, err := s.dc.ListImages(ctx, false)
 	if err != nil {

@@ -15,36 +15,53 @@ import (
 	"docman/internal/store"
 )
 
+// imageView is one image as the Images page shows it.
+type imageView struct {
+	*dock.ImageSummary
+	InUse     int      `json:"in_use"`
+	InUseBy   []string `json:"in_use_by"`
+	Reference string   `json:"reference"`
+	// Origin is where the image came from: registry, uploaded, local or
+	// unknown (not checked yet). Update is the latest registry check of
+	// its reference, when there is one.
+	Origin string            `json:"origin"`
+	Update *store.ImageCheck `json:"update,omitempty"`
+}
+
 func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
-	images, err := s.dc.ListImages(r.Context(), boolQuery(r, "all"))
+	// The monitor's snapshot holds the usual list; only "all" (intermediate
+	// layers too) is read from Docker.
+	if !boolQuery(r, "all") {
+		snap, err := s.mon.current(r.Context())
+		if err != nil {
+			failDocker(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"images": snap.Images})
+		return
+	}
+	images, err := s.dc.ListImages(r.Context(), true)
 	if err != nil {
 		failDocker(w, err)
 		return
 	}
+	containers, _ := cachedContainers(r.Context(), s.dc)
+	writeJSON(w, http.StatusOK, map[string]any{"images": s.imageViews(images, containers)})
+}
+
+// imageViews describes images, and which of the containers use each.
+func (s *Server) imageViews(images []*dock.ImageSummary, containers []*dock.ContainerSummary) []imageView {
 	// Which images are in use, so the UI can warn before a delete.
 	inUse := map[string]int{}
 	usedBy := map[string][]string{}
-	if containers, err := cachedContainers(r.Context(), s.dc); err == nil {
-		for _, c := range withoutHelpers(containers) {
-			inUse[c.ImageID]++
-			usedBy[c.ImageID] = append(usedBy[c.ImageID], c.Name())
-		}
-	}
-	type view struct {
-		*dock.ImageSummary
-		InUse     int      `json:"in_use"`
-		InUseBy   []string `json:"in_use_by"`
-		Reference string   `json:"reference"`
-		// Origin is where the image came from: registry, uploaded, local or
-		// unknown (not checked yet). Update is the latest registry check of
-		// its reference, when there is one.
-		Origin string            `json:"origin"`
-		Update *store.ImageCheck `json:"update,omitempty"`
+	for _, c := range withoutHelpers(containers) {
+		inUse[c.ImageID]++
+		usedBy[c.ImageID] = append(usedBy[c.ImageID], c.Name())
 	}
 	checks := s.st.ImageChecks()
 	uploaded := s.st.UploadedRefs()
 	fromRepo := s.st.RepoImages()
-	out := make([]view, 0, len(images))
+	out := make([]imageView, 0, len(images))
 	for _, img := range images {
 		ref := "<none>"
 		if len(img.RepoTags) > 0 && img.RepoTags[0] != "<none>:<none>" {
@@ -60,7 +77,7 @@ func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
 		if names == nil {
 			names = []string{}
 		}
-		v := view{ImageSummary: img, InUse: inUse[img.ID], InUseBy: names, Reference: ref, Origin: originLocal}
+		v := imageView{ImageSummary: img, InUse: inUse[img.ID], InUseBy: names, Reference: ref, Origin: originLocal}
 		if ref != "<none>" && !strings.Contains(ref, "@") {
 			v.Origin = imageOrigin(ref, checks, uploaded, fromRepo)
 			// Of an image's tags, report the one whose check matters most.
@@ -73,7 +90,7 @@ func (s *Server) handleListImages(w http.ResponseWriter, r *http.Request) {
 		out = append(out, v)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Created > out[j].Created })
-	writeJSON(w, http.StatusOK, map[string]any{"images": out})
+	return out
 }
 
 func (s *Server) handleInspectImage(w http.ResponseWriter, r *http.Request) {

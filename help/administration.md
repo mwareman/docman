@@ -9,7 +9,7 @@ DocMan runs as a container on the Docker host it manages, and needs three things
 | What | Why |
 | --- | --- |
 | The Docker socket, `-v /var/run/docker.sock:/var/run/docker.sock` | DocMan manages the host through it. Without it nothing works. |
-| A volume at `/data`, such as `-v docman-data:/data` | Holds DocMan's database (account, passkeys, API tokens, fixed addresses, preferences, activity log) and its TLS key pair. Without it you lose your sign-in on every restart. |
+| A volume at `/data`, such as `-v docman-data:/data` | Holds DocMan's database (account, passkeys, API tokens, fixed addresses, preferences, activity log) its TLS key pair, and `status.json`, a snapshot of containers, images and disk usage that DocMan's background monitor keeps current (it can be deleted; DocMan rewrites it). Without it you lose your sign-in on every restart. |
 | A restart policy, `--restart unless-stopped` | Brings DocMan back after a crash or a reboot. |
 
 Port `9444` serves the UI and the API over HTTPS. Port `9080`, if you publish it, redirects plain HTTP to HTTPS.

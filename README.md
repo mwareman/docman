@@ -56,7 +56,7 @@ Put this in `/opt/docman/docker-compose.yml` on the host:
 ```yaml
 services:
   docman:
-    image: docman:1.9.4
+    image: docman:1.9.5
     container_name: docman
     restart: unless-stopped
     ports:
@@ -101,7 +101,7 @@ docker run -d \
   -v /var/run/docker.sock:/var/run/docker.sock \
   --security-opt no-new-privileges:true \
   -e DOCMAN_HOSTNAMES=docman.your-domain.lan \
-  docman:1.9.4
+  docman:1.9.5
 
 docker logs docman
 ```
@@ -113,21 +113,21 @@ over, and load it:
 
 | File | For |
 | --- | --- |
-| `docman-1.9.4-amd64.tar.gz` | x86-64 — nearly every server and NAS |
-| `docman-1.9.4-arm64.tar.gz` | 64-bit ARM — Raspberry Pi 4/5 on a 64-bit OS, Apple silicon, Graviton |
-| `docman-1.9.4-armv7.tar.gz` | 32-bit ARM — older Pi and similar |
-| `docman-1.9.4-386.tar.gz` | 32-bit x86 |
-| `docman-1.9.4-multiarch.tar.gz` | All four in one archive. Needs Docker 25+ with the containerd image store on the receiving host; the single-architecture files load on any version. |
+| `docman-1.9.5-amd64.tar.gz` | x86-64 — nearly every server and NAS |
+| `docman-1.9.5-arm64.tar.gz` | 64-bit ARM — Raspberry Pi 4/5 on a 64-bit OS, Apple silicon, Graviton |
+| `docman-1.9.5-armv7.tar.gz` | 32-bit ARM — older Pi and similar |
+| `docman-1.9.5-386.tar.gz` | 32-bit x86 |
+| `docman-1.9.5-multiarch.tar.gz` | All four in one archive. Needs Docker 25+ with the containerd image store on the receiving host; the single-architecture files load on any version. |
 
 ```bash
-scp dist/docman-1.9.4-amd64.tar.gz you@dockerhost:/tmp/
+scp dist/docman-1.9.5-amd64.tar.gz you@dockerhost:/tmp/
 
 # on the docker host
-gunzip -c /tmp/docman-1.9.4-amd64.tar.gz | docker load
+gunzip -c /tmp/docman-1.9.5-amd64.tar.gz | docker load
 docker images docman
 ```
 
-Both tags land: `docman:1.9.4` and `docman:latest`. Check the architecture of the
+Both tags land: `docman:1.9.5` and `docman:latest`. Check the architecture of the
 host first if you are unsure:
 
 ```bash
@@ -137,8 +137,8 @@ docker info --format '{{.Architecture}}'     # x86_64, aarch64, armv7l …
 To rebuild the archives yourself:
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/386 --build-arg VERSION=1.9.4 -t docman:1.9.4 -t docman:latest --load .
-docker save --platform linux/amd64 docman:1.9.4 | gzip -9 > dist/docman-1.9.4-amd64.tar.gz
+docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/386 --build-arg VERSION=1.9.5 -t docman:1.9.5 -t docman:latest --load .
+docker save --platform linux/amd64 docman:1.9.5 | gzip -9 > dist/docman-1.9.5-amd64.tar.gz
 ```
 
 If you have a registry, the usual `docker tag` / `docker push` / `docker pull`
@@ -241,7 +241,7 @@ State lives in the volume, so upgrading is a replace:
 gunzip -c docman-1.1.tar.gz | docker load        # or docker pull
 cd /opt/docman && docker compose up -d           # compose
 # or:
-docker rm -f docman && docker run -d ...same flags... docman:1.9.4
+docker rm -f docman && docker run -d ...same flags... docman:1.9.5
 ```
 
 The database migrates itself on start. Fixed addresses are re-applied
@@ -264,7 +264,7 @@ contains the password hash, passkey public keys and API token hashes.
 ## Configuration
 
 Everything is an environment variable; there are no flags. `docker run --rm
-docman:1.9.4 --help` prints this list.
+docman:1.9.5 --help` prints this list.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -309,14 +309,14 @@ Multi-architecture, for x86-64, 32-bit x86, arm64 and armv7:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/386,linux/arm64,linux/arm/v7 \
-  --build-arg VERSION=1.9.4 \
-  -t docman:1.9.4 .
+  --build-arg VERSION=1.9.5 \
+  -t docman:1.9.5 .
 ```
 
 A single architecture you can run immediately:
 
 ```bash
-docker build --build-arg VERSION=1.9.4 -t docman:1.9.4 .
+docker build --build-arg VERSION=1.9.5 -t docman:1.9.5 .
 ```
 
 Locally, without docker:

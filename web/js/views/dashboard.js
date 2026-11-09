@@ -1,7 +1,7 @@
 // Overview: live host metrics with a per-container breakdown.
 
 import { h, add, clear, icon, bytes, rate, pct, num, dur, notice } from '../ui.js';
-import { System, socket } from '../api.js';
+import { System, socket, onStatus } from '../api.js';
 import { sparkline, dualSparkline, gauge, stackBar, seriesColor } from '../charts.js';
 
 export function dashboardView(ctx) {
@@ -81,7 +81,6 @@ export function dashboardView(ctx) {
   const cpuGauge = gauge(cpuGaugeCanvas, { thickness: 6 });
 
   renderInfo(ctx.state.system, infoHost);
-  loadStorage(storageHost);
 
   const conn = socket('/api/stream/host', {
     onJSON: (message) => {
@@ -205,28 +204,43 @@ export function dashboardView(ctx) {
     warnHost.style.marginBottom = '14px';
   }
 
-  async function loadStorage(host) {
-    try {
-      const df = await System.df();
-      clear(host);
-      add(host, [
-        h('dl', { class: 'kv' },
-          h('dt', { text: 'Image layers' }), h('dd', { text: bytes(df.layers_bytes) }),
-          h('dt', { text: 'Images' }), h('dd', { text: `${num(df.image_count)} · ${bytes(df.images_bytes)}` }),
-          h('dt', { text: 'Volumes' }), h('dd', { text: `${num(df.volume_count)} · ${df.volumes_bytes ? bytes(df.volumes_bytes) : 'size not reported'}` }),
-        ),
-        h('div', { class: 'row', style: { marginTop: '10px' } },
-          h('a', { href: '#/images', class: 'btn sm' }, icon('layers'), 'Images'),
-          h('a', { href: '#/volumes', class: 'btn sm' }, icon('database'), 'Volumes'),
-        ),
-      ]);
-    } catch (err) {
-      clear(host);
-      add(host, [h('div', { class: 'faint small', text: err.message })]);
-    }
+  function renderStorage(host, df) {
+    clear(host);
+    add(host, [
+      h('dl', { class: 'kv' },
+        h('dt', { text: 'Image layers' }), h('dd', { text: bytes(df.layers_bytes) }),
+        h('dt', { text: 'Images' }), h('dd', { text: `${num(df.image_count)} · ${bytes(df.images_bytes)}` }),
+        h('dt', { text: 'Volumes' }), h('dd', { text: `${num(df.volume_count)} · ${df.volumes_bytes ? bytes(df.volumes_bytes) : 'size not reported'}` }),
+      ),
+      h('div', { class: 'row', style: { marginTop: '10px' } },
+        h('a', { href: '#/images', class: 'btn sm' }, icon('layers'), 'Images'),
+        h('a', { href: '#/volumes', class: 'btn sm' }, icon('database'), 'Volumes'),
+      ),
+    ]);
   }
 
-  return { dispose: () => conn.close() };
+  // Disk usage is measured by the server in the background and pushed here;
+  // ask once over REST so the card does not wait for the next push.
+  let haveStorage = false;
+  const unsubscribe = onStatus((m) => {
+    if (m.counts) {
+      runTile.value.textContent = String(m.counts.containers);
+      runTile.note.textContent = `${m.counts.running} running`;
+    }
+    if (m.storage) {
+      haveStorage = true;
+      renderStorage(storageHost, m.storage);
+    }
+  });
+  System.df().then((df) => {
+    if (!haveStorage) renderStorage(storageHost, df);
+  }).catch((err) => {
+    if (haveStorage) return;
+    clear(storageHost);
+    add(storageHost, [h('div', { class: 'faint small', text: err.message })]);
+  });
+
+  return { dispose: () => { conn.close(); unsubscribe(); } };
 }
 
 function tile(label, iconName) {

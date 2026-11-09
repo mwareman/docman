@@ -1,13 +1,12 @@
 package srv
 
 import (
+	"errors"
 	"net/http"
 	"runtime"
 	"strings"
-	"sync"
 	"time"
 
-	"docman/internal/dock"
 	"docman/internal/netmgr"
 )
 
@@ -38,64 +37,29 @@ func (s *Server) handleSystem(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleCounts answers the sidebar's four numbers. The sidebar used to fetch the
-// full container, image and volume lists for them, which meant update detection
-// and per-image lookups on every page load; plain Docker lists are enough here.
+// handleCounts answers the sidebar's four numbers from the monitor's snapshot.
 func (s *Server) handleCounts(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	var (
-		wg               sync.WaitGroup
-		containers       []*dock.ContainerSummary
-		images           []*dock.ImageSummary
-		volumes          []*dock.Volume
-		errC, errI, errV error
-	)
-	wg.Add(3)
-	go func() { defer wg.Done(); containers, errC = cachedContainers(ctx, s.dc) }()
-	go func() { defer wg.Done(); images, errI = cachedImages(ctx, s.dc) }()
-	go func() { defer wg.Done(); volumes, errV = s.dc.ListVolumes(ctx) }()
-	wg.Wait()
-	for _, err := range []error{errC, errI, errV} {
-		if err != nil {
-			failDocker(w, err)
-			return
-		}
-	}
-	containers = withoutHelpers(containers)
-	running := 0
-	for _, c := range containers {
-		if c.State == "running" {
-			running++
-		}
-	}
-	writeJSON(w, http.StatusOK, map[string]int{
-		"containers": len(containers), "running": running,
-		"images": len(images), "volumes": len(volumes),
-	})
-}
-
-func (s *Server) handleDiskUsage(w http.ResponseWriter, r *http.Request) {
-	df, err := s.dc.DiskUsage(r.Context())
+	snap, err := s.mon.current(r.Context())
 	if err != nil {
 		failDocker(w, err)
 		return
 	}
-	var imageBytes, volumeBytes int64
-	for _, img := range df.Images {
-		imageBytes += img.Size
+	writeJSON(w, http.StatusOK, snap.Counts)
+}
+
+// handleDiskUsage reports the monitor's last measurement, which Docker takes
+// seconds to produce; the first request after start-up measures it itself.
+func (s *Server) handleDiskUsage(w http.ResponseWriter, r *http.Request) {
+	if u := s.mon.storageNow(); u != nil {
+		writeJSON(w, http.StatusOK, u)
+		return
 	}
-	for _, v := range df.Volumes {
-		if v.UsageData != nil && v.UsageData.Size > 0 {
-			volumeBytes += v.UsageData.Size
-		}
+	s.mon.refreshStorage(r.Context())
+	if u := s.mon.storageNow(); u != nil {
+		writeJSON(w, http.StatusOK, u)
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"layers_bytes":  df.LayersSize,
-		"images_bytes":  imageBytes,
-		"volumes_bytes": volumeBytes,
-		"image_count":   len(df.Images),
-		"volume_count":  len(df.Volumes),
-	})
+	failDocker(w, errors.New("disk usage is not available"))
 }
 
 func (s *Server) handleHostMetricsOnce(w http.ResponseWriter, r *http.Request) {

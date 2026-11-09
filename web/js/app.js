@@ -1,7 +1,7 @@
 // DocMan shell: boot, authentication gate, sidebar, hash router.
 
 import { h, add, clear, icon, logoMark, toast, toastError, confirmDialog } from './ui.js';
-import { State, System, Counts } from './api.js';
+import { State, System, Counts, startStatusFeed, stopStatusFeed, onStatus } from './api.js';
 import { renderGate } from './views/gate.js';
 import { dashboardView } from './views/dashboard.js';
 import { containersView } from './views/containers.js';
@@ -72,7 +72,12 @@ function teardown() {
   }
   activeView = null;
   window.removeEventListener('hashchange', route);
+  if (unsubStatus) unsubStatus();
+  unsubStatus = null;
+  stopStatusFeed();
 }
+
+let unsubStatus = null;
 
 const NAV = [
   { href: '#/', label: 'Overview', icon: 'dashboard' },
@@ -146,6 +151,14 @@ async function renderShell(status) {
   add(app, [sidebar, main]);
   renderNav();
   refreshCounts();
+  // The server keeps these numbers current; follow them rather than asking.
+  startStatusFeed();
+  if (unsubStatus) unsubStatus();
+  unsubStatus = onStatus((m) => {
+    const { containers, running, images, volumes } = m.counts || {};
+    shellState.counts = { containers, running, images, volumes };
+    renderNav();
+  });
 
   window.addEventListener('hashchange', route);
   route();

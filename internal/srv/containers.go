@@ -141,26 +141,24 @@ func (s *Server) handleListContainers(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("all") != "" {
 		all = boolQuery(r, "all")
 	}
-	list, err := s.dc.ListContainers(r.Context(), all)
+	// The monitor's snapshot holds every container; only a running-only list
+	// is read from Docker.
+	if all {
+		snap, err := s.mon.current(r.Context())
+		if err != nil {
+			failDocker(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"containers": snap.Containers})
+		return
+	}
+	list, err := s.dc.ListContainers(r.Context(), false)
 	if err != nil {
 		failDocker(w, err)
 		return
 	}
 	list = withoutHelpers(list)
-	pins := s.pinMap()
-	selfID := s.selfID()
-	out := make([]*containerView, 0, len(list))
-	for _, c := range list {
-		out = append(out, s.toView(c, pins, selfID))
-	}
-	s.markUpdates(out, s.updatesFor(r.Context(), list))
-	sort.Slice(out, func(i, j int) bool {
-		if (out[i].State == "running") != (out[j].State == "running") {
-			return out[i].State == "running"
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
-	writeJSON(w, http.StatusOK, map[string]any{"containers": out})
+	writeJSON(w, http.StatusOK, map[string]any{"containers": s.containerViews(r.Context(), list)})
 }
 
 func (s *Server) handleGetContainer(w http.ResponseWriter, r *http.Request) {

@@ -157,6 +157,36 @@ export function socket(path, { params, onJSON, onBinary, onOpen, onDown, retry =
   };
 }
 
+// ---------- status feed ----------
+
+// One shared socket carries the server's background-monitored status: counts,
+// disk usage and the image list. Pages subscribe with onStatus and are handed
+// the latest message at once, then each new one as the server publishes it.
+const feed = { handlers: new Set(), last: null, conn: null };
+
+export function startStatusFeed() {
+  if (feed.conn) return;
+  feed.conn = socket('/api/stream/status', {
+    onJSON: (message) => {
+      if (message.type !== 'status') return;
+      feed.last = message;
+      feed.handlers.forEach((fn) => { try { fn(message); } catch { /* one page's fault */ } });
+    },
+  });
+}
+
+export function stopStatusFeed() {
+  if (feed.conn) feed.conn.close();
+  feed.conn = null;
+  feed.last = null;
+}
+
+export function onStatus(fn) {
+  feed.handlers.add(fn);
+  if (feed.last) fn(feed.last);
+  return () => feed.handlers.delete(fn);
+}
+
 // ---------- endpoint shortcuts ----------
 
 export const State = {

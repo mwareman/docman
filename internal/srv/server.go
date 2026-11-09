@@ -61,6 +61,7 @@ type Server struct {
 	limiter    *limiter
 	hub        *statsHub
 	totp       *totpEnrolments
+	mon        *monitor
 }
 
 // New wires a server up. web is the embedded UI filesystem.
@@ -82,12 +83,17 @@ func New(cfg Config, st *store.Store, dc *dock.Client, web fs.FS, logger *log.Lo
 		totp:       newTOTPEnrolments(),
 	}
 	s.hub = newStatsHub(dc, s.logf)
+	s.mon = newMonitor(s)
 	s.routes()
 	return s
 }
 
 // Handler returns the root HTTP handler.
 func (s *Server) Handler() http.Handler { return s.withCommonHeaders(s.mux) }
+
+// StatusMonitor keeps the status snapshot (and /data/status.json) current until
+// ctx ends.
+func (s *Server) StatusMonitor(ctx context.Context) { s.mon.Run(ctx) }
 
 // SetSetupKey records the first-run key so the bootstrap endpoint can check it.
 func (s *Server) SetSetupKey(key string) { s.setupKey = key }
@@ -243,6 +249,7 @@ func (s *Server) routes() {
 	// Streams.
 	s.get("/api/stream/host", s.handleHostStream)
 	s.get("/api/stream/containers", s.handleContainersStream)
+	s.get("/api/stream/status", s.handleStatusStream)
 	s.get("/api/stream/logs/{id}", s.handleLogStream)
 	s.get("/api/stream/stats/{id}", s.handleStatsStream)
 	s.get("/api/stream/exec/{id}", s.handleExecStream)
@@ -265,7 +272,11 @@ func (s *Server) route(method, pattern string, h http.HandlerFunc) {
 		inner := h
 		h = func(w http.ResponseWriter, r *http.Request) {
 			clearRecentLists()
-			defer clearRecentLists()
+			s.mon.invalidate()
+			defer func() {
+				clearRecentLists()
+				s.mon.invalidate()
+			}()
 			inner(w, r)
 		}
 	}

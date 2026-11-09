@@ -4,7 +4,7 @@ import {
   h, add, clear, icon, bytes, ago, when, shortID, toast, toastError,
   confirmDialog, modal, field, notice, spinner, debounce, emptyState, copyText,
 } from '../ui.js';
-import { Images, stream } from '../api.js';
+import { Images, stream, onStatus } from '../api.js';
 import { openDeployWizard, openUploadDialog } from './deploy.js';
 
 export function imagesView(ctx) {
@@ -434,7 +434,13 @@ export function imagesView(ctx) {
 
   add(emptyHost, [spinner()]);
   load();
-  return { dispose() {} };
+  // The server watches Docker and pushes the list whenever it changes.
+  const unsubscribe = onStatus((m) => {
+    if (!m.images) return;
+    images = m.images;
+    draw();
+  });
+  return { dispose: unsubscribe };
 }
 
 function table(headers, rows) {
