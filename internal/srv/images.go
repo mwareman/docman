@@ -351,6 +351,9 @@ func (s *Server) handlePruneImages(w http.ResponseWriter, r *http.Request) {
 	}
 	s.st.Audit(identityOf(r).Actor(), "image.prune", "",
 		fmt.Sprintf("reclaimed %d bytes", report.SpaceReclaimed), true)
+	// Stale before the reply goes out, so the reload the client makes on
+	// receiving it cannot be answered from the old snapshot.
+	s.mon.invalidate()
 	writeJSON(w, http.StatusOK, report)
 }
 

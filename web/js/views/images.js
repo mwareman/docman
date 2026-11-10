@@ -19,6 +19,8 @@ export function imagesView(ctx) {
     onInput: debounce((event) => { query = event.target.value.trim().toLowerCase(); draw(); }, 160),
   });
 
+  const pruneButton = h('button', { class: 'btn', onClick: () => prune() }, icon('trash'), 'Prune');
+
   // Registry update checks: when they last ran, and a button to run one now.
   const checkedLabel = h('span', { class: 'small faint nowrap' });
   const showChecked = (summary) => {
@@ -54,7 +56,7 @@ export function imagesView(ctx) {
     }), 'Untagged only'),
     checkedLabel,
     refreshButton,
-    h('button', { class: 'btn', onClick: () => prune() }, icon('trash'), 'Prune'),
+    pruneButton,
     h('button', {
       class: 'btn', title: 'Import a docker save archive without creating a container',
       onClick: () => openUploadDialog({ onDone: () => load() }),
@@ -414,16 +416,25 @@ export function imagesView(ctx) {
       extra: unused,
     });
     if (!ok) return;
+    pruneButton.disabled = true;
+    const label = pruneButton.lastChild;
+    const was = label.textContent;
+    label.textContent = 'Pruning…';
     try {
       const report = await Images.prune(unused.querySelector('input').checked);
       toast(`Reclaimed ${bytes(report.SpaceReclaimed)}`, 'ok');
-      load();
-      ctx.refreshCounts();
     } catch (err) { toastError(err); }
+    // Reload either way (a failed prune may still have removed some images),
+    // and wait for the new list before handing the button back.
+    try { await load(); } finally {
+      label.textContent = was;
+      pruneButton.disabled = false;
+    }
+    ctx.refreshCounts();
   }
 
   function load() {
-    Images.list().then((data) => {
+    return Images.list().then((data) => {
       images = data.images || [];
       draw();
     }).catch((err) => {

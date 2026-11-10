@@ -2,15 +2,15 @@
 
 ## Versioning
 
-DocMan stays on **1.x**: 1.9, 1.9.1, 1.9.2, 1.9.3, 1.9.4, 1.9.5, then 1.9.6 and so on.
+DocMan stays on **1.x**: 1.9, 1.9.1, 1.9.2, 1.9.3, 1.9.4, 1.9.5, 1.9.6, then 1.9.7 and so on.
 **Do not move to 2.x until the owner says so.**
 
 Each release is built for four architectures and saved to `dist/`:
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7,linux/386 \
-  --build-arg VERSION=1.9.5 -t docman:1.9.5 -t docman:latest --load .
-docker save --platform linux/amd64 docman:1.9.5 docman:latest | gzip -9 > dist/docman-1.9.5-amd64.tar.gz
+  --build-arg VERSION=1.9.6 -t docman:1.9.6 -t docman:latest --load .
+docker save --platform linux/amd64 docman:1.9.6 docman:latest | gzip -9 > dist/docman-1.9.6-amd64.tar.gz
 ```
 
 Vet and test without a local Go toolchain (`go.mod` requires Go 1.25; the CA
@@ -26,6 +26,7 @@ docker run --rm -v "$PWD:/src" -w /src -e SSL_CERT_FILE=/src/build/certs/host-ro
 
 | Version | Changes |
 | --- | --- |
+| 1.9.6 | Prune on the Images page waits for the new list before it finishes: the button shows "Pruning…" and stays disabled until the table is redrawn, and the sidebar counts follow. The server marks the status snapshot stale before it replies to a prune, so the reload that follows cannot be answered from the old one. |
 | 1.9.5 | Background status monitor: one goroutine keeps a snapshot of the containers (with update flags), images, counts and disk usage, refreshed on Docker events and every 10 s, and writes it to `/data/status.json` when it changes. The Overview, Containers and Images pages and the sidebar counts read from it instead of querying Docker per request (`GET /api/containers`, `/api/images`, `/api/counts`, the disk-usage endpoint). Any change made through the API marks it stale so the next read rebuilds it first. WebSockets: `/api/stream/containers` now takes its list from the snapshot, and the new `/api/stream/status` pushes counts, disk usage and images on every new snapshot (one shared socket in the UI). Unit tests in `internal/srv/monitor_test.go`. |
 | 1.9.4 | Faster container and image lists: containers not yet seen are inspected in parallel (up to 8) instead of one after another, update detection shares one image list for 3 seconds, and the Containers page asks over REST only if the live stream has not delivered within 1.5 s. The sidebar counts come from a new light `GET /api/counts` instead of three full lists; the container and image lists are cached for 3 s (cleared by any change made through the API), which the Images page's in-use lookup and the counts share. The Dockerfile builds on `golang:1.25-alpine` so each platform no longer downloads the Go 1.25 toolchain. |
 | 1.9.3 | Recreate onto a new image no longer copies the old image's built-in settings: environment entries, labels, command, entrypoint, working directory, user, health check, exposed ports and declared volumes that are still exactly the old image's values are left to the new image (`dock.DropImageDefaults`, applied in `recreateContainer`; unit tests in `internal/dock/inherit_test.go`, and checked end to end against a real engine). Found with TPRM: after recreating onto 1.0.27 its container still carried `TPRM_VERSION=1.0.26` from the old image. The command is only left to the image when the entrypoint is too (Docker ignores an image's `Cmd` once a container has its own entrypoint). Configuration shows Entrypoint and Command empty, with the image's values as placeholders, when they are the image's, and says whether each is the image's or the owner's; `GET …/spec` returns `image_defaults` for it, and the overview tags the command **image default** or **custom**. The documented vet command now uses `golang:1.25-alpine` (`go.mod` requires 1.25) and the host CA file; the Dockerfile build is unaffected — it sets `GOTOOLCHAIN=auto` and fetches 1.25 itself. |
